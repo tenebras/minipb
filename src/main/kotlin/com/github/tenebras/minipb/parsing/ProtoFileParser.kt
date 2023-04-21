@@ -187,7 +187,13 @@ class ProtoFileParser(
                     }
                 )
             },
-            extends = extends,
+            extends = extends.map {
+                it.copy(
+                    fields = it.fields.map { field ->
+                        field.copy( type = typeResolver.find(field.type.name, field.type.packageName) )
+                    }
+                )
+            },
             imports = imports,
             typeResolver = typeResolver
         )
