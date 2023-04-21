@@ -1,0 +1,338 @@
+package com.github.tenebras.minipb
+
+import com.github.tenebras.minipb.TypeResolver
+import com.github.tenebras.minipb.model.*
+import com.github.tenebras.minipb.parsing.*
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+import java.io.File
+
+internal class ProtoFileParserTest {
+
+    @Test
+    fun `it should read syntax package and options`() {
+        val file = ProtoFileParser.parseString(
+            """
+            syntax = "proto3";
+            
+            package com.kostynenko.sample.api;
+            
+            option java_multiple_files = true;
+            option java_package = "com.kostynenko.sample.api";
+            option go_package = "github.com/tenebras/com.kostynenko.sample.api/proto/src;proto";
+            
+            message Test {
+                option (my_option).a = true;
+                
+                string package = 1;
+                string syntax = 2;
+                string option = 3;
+            }
+        """
+        )
+
+        assertEquals("\"proto3\"", file.syntax)
+        assertEquals("com.kostynenko.sample.api", file.packageName)
+
+        assertEquals(3, file.options.size)
+        assertEquals("true", file.options["java_multiple_files"])
+        assertEquals("\"com.kostynenko.sample.api\"", file.options["java_package"])
+        assertEquals("\"github.com/tenebras/com.kostynenko.sample.api/proto/src;proto\"", file.options["go_package"])
+    }
+
+    @Test
+    fun `it should parse reserved`() {
+        val reserved = ProtoFileParser.parseString(
+            """
+           message Test{
+                reserved 8;
+                reserved 13, 14;
+                reserved 66 to 76;
+                reserved 20 to 22, 23 to 25;
+                reserved 2, 15, 9 to 11, 80 to max;
+                reserved "foo", "bar";
+                reserved "too";
+            } 
+        """
+        ).type<MessageType>("Test").reserved
+
+        assertEquals(listOf("foo", "bar", "too"), reserved.names)
+        assertEquals(listOf(8, 13, 14, 2, 15), reserved.numbers)
+        assertEquals(listOf(66..76, 20..22, 23..25, 9..11, 80..536_870_911), reserved.ranges)
+    }
+
+    @Test
+    fun `it should parse enum`() {
+        val enum = ProtoFileParser.parseString(
+            """
+            enum Test {
+                option allow_alias = true;
+                DEFAULT_VALUE = 0;
+                VALUE = 1;
+                VALUE_1 = 1[(custom_option) = "hello world"];
+            } 
+        """
+        ).type<EnumType>("Test")
+
+        assertEquals(3, enum.values.size)
+        assertEquals("true", enum.options["allow_alias"])
+        assertEquals(0, enum.value("DEFAULT_VALUE").number)
+        assertEquals(1, enum.value("VALUE").number)
+
+        with (enum.value("VALUE_1")) {
+            assertEquals(1, number)
+            assertEquals("\"hello world\"", options["(custom_option)"])
+        }
+    }
+
+    @Test
+    fun `it should read services`() {
+        val file = ProtoFileParser.parseString(
+            """
+            syntax = "proto3";
+            
+            package com.kostynenko.sample.api;
+            
+            service EmptyService{}
+            
+            service TestService {
+                rpc Method1(Request1) returns (Response1) {}
+                rpc Method2(stream Request2) returns (Response2) {};
+                rpc Method3(Request3) returns (stream Response3);
+                rpc Method4(stream Request4) returns (stream Response4) {}
+            }
+        """
+        )
+
+        assertEquals(2, file.services.size)
+        assertTrue(file.hasService("EmptyService"))
+        assertTrue(file.hasService("TestService"))
+
+        assertEquals(0, file.service("EmptyService").methods.size)
+        assertEquals(4, file.service("TestService").methods.size)
+
+        val testService = file.service("TestService")
+
+        with(testService.method("Method1")) {
+            assertEquals("Request1", request.name)
+            assertEquals("com.kostynenko.sample.api", request.packageName)
+            assertFalse(isRequestStreamed)
+
+            assertEquals("Response1", response.name)
+            assertEquals("com.kostynenko.sample.api", response.packageName)
+            assertFalse(isResponseStreamed)
+        }
+
+        with(testService.method("Method2")) {
+            assertEquals("Request2", request.name)
+            assertEquals("com.kostynenko.sample.api", request.packageName)
+            assertTrue(isRequestStreamed)
+
+            assertEquals("Response2", response.name)
+            assertEquals("com.kostynenko.sample.api", response.packageName)
+            assertFalse(isResponseStreamed)
+        }
+
+        with(testService.method("Method3")) {
+            assertEquals("Request3", request.name)
+            assertEquals("com.kostynenko.sample.api", request.packageName)
+            assertFalse(isRequestStreamed)
+
+            assertEquals("Response3", response.name)
+            assertEquals("com.kostynenko.sample.api", response.packageName)
+            assertTrue(isResponseStreamed)
+        }
+
+        with(testService.method("Method4")) {
+            assertEquals("Request4", request.name)
+            assertEquals("com.kostynenko.sample.api", request.packageName)
+            assertTrue(isRequestStreamed)
+
+            assertEquals("Response4", response.name)
+            assertEquals("com.kostynenko.sample.api", response.packageName)
+            assertTrue(isResponseStreamed)
+        }
+    }
+
+    @Test
+    fun `it should parse complex message with basic fields`() {
+        val file = ProtoFileParser.parseString(
+            """
+            syntax = "proto3";
+            
+            package com.kostynenko.api;
+            
+            message Types {
+                repeated double doubleValue = 1[packed=false, deprecated = true];
+                repeated float floatValue = 2 [packed=false,deprecated = true];
+                repeated int32 int32Value = 3;
+                optional int64 int64Value = 4;
+                uint32 uint32Value = 5;
+                uint64 uint64Value = 6;
+                sint32 sint32Value = 7;
+                sint64 sint64Value = 8;
+                fixed32 fixed32Value = 9;
+                fixed64 fixed64Value = 10;
+                sfixed32 sfixed32Value = 11;
+                sfixed64 sfixed64Value = 12;
+                bool boolValue = 13;
+                string stringValue = 14;
+                bytes bytesValue = 15;
+                ENUM enumValue = 16;
+                SubType subType = 17;
+                map<string, int32> mapValue = 18;
+            
+                message SubType { int32 a = 1; }
+                enum ENUM { ZERO = 0; ONE = 1; TWO = 2; THREE = 3;}
+            }
+        """
+        )
+
+        val message = file.type<MessageType>("Types", "com.kostynenko.api")
+        assertEquals("Types", message.name)
+        assertEquals("com.kostynenko.api", message.packageName)
+
+        with(message.field("doubleValue")) {
+            assertEquals(true, isRepeated)
+            assertEquals(false, isOptional)
+            assertEquals("doubleValue", name)
+            assertEquals(1, number)
+            assertEquals("false", options["packed"])
+            assertEquals("true", options["deprecated"])
+            assertEquals(doubleType, type)
+        }
+    }
+
+    @Test
+    fun `it should parse embedded message and enum`() {
+        val typeResolver = TypeResolver()
+        val file = ProtoFileParser.parseString(
+            """
+            syntax = "proto3"; 
+            package com.kostynenko.api;
+            
+            message Test {
+                message One {
+                    message Two {
+                        message Three {
+                          uint32 test_field = 1 [deprecated=true];
+                        }
+                    }
+                }
+            
+                message Dummy {
+                  One.Two.Three message = 1;
+                  TestEnum en = 2;
+                }
+                
+                enum TestEnum {
+                  DEF = 0;
+                }
+            }
+            
+            message One {
+              message Two {
+                message Three {
+                  string test_string_field = 1;
+                }
+              }
+            }
+            
+            enum RootEnum {
+                DEFAULT_VALUE = 0;
+                VALUE = 1;
+            }
+        """,
+            typeResolver
+        )
+
+        assertTrue(file.hasType<EnumType>("TestEnum", "com.kostynenko.api.Test"))
+        assertTrue(file.hasType<MessageType>("Test", "com.kostynenko.api"))
+        assertTrue(file.hasType<MessageType>("One", "com.kostynenko.api.Test"))
+        assertTrue(file.hasType<MessageType>("Two", "com.kostynenko.api.Test.One"))
+        assertTrue(file.hasType<MessageType>("Three", "com.kostynenko.api.Test.One.Two"))
+        assertTrue(file.hasType<MessageType>("Dummy", "com.kostynenko.api.Test"))
+        assertTrue(file.hasType<EnumType>("TestEnum", "com.kostynenko.api.Test"))
+        assertTrue(file.hasType<MessageType>("One", "com.kostynenko.api"))
+        assertTrue(file.hasType<MessageType>("Two", "com.kostynenko.api.One"))
+        assertTrue(file.hasType<MessageType>("Three", "com.kostynenko.api.One.Two"))
+        assertTrue(file.hasType<EnumType>("RootEnum", "com.kostynenko.api"))
+
+        assertEquals(
+            file.type<MessageType>("Three", "com.kostynenko.api.Test.One.Two"),
+            file.type<MessageType>("Dummy", "com.kostynenko.api.Test").field("message").type
+        )
+        assertEquals(
+            file.type<EnumType>("TestEnum", "com.kostynenko.api.Test"),
+            file.type<MessageType>("Dummy", "com.kostynenko.api.Test").field("en").type
+        )
+    }
+
+    @Test
+    fun `it should parse oneOf`() {
+        val message = ProtoFileParser.parseString(
+            """
+            syntax = "proto3";
+            
+            message GetRequest {
+                oneof oneof_test{
+                    option (my_option.a) = 54321;
+                    string id = 1[deprecated=true, packed=false];
+                    uint32 number = 2;
+                }
+            }
+        """
+        ).type<MessageType>("GetRequest")
+
+        assertTrue(message.hasOneOf("oneof_test"))
+
+        assertEquals("54321", message.oneOf("oneof_test").options["(my_option.a)"])
+
+        with(message.oneOf("oneof_test").field("id")) {
+            assertEquals(stringType, type)
+            assertEquals(1, number)
+            assertEquals("true", options["deprecated"])
+            assertEquals("false", options["packed"])
+        }
+
+        with(message.oneOf("oneof_test").field("number")) {
+            assertEquals(uint32Type, type)
+            assertEquals(2, number)
+            assertTrue(options.isEmpty())
+        }
+    }
+
+    @Test
+    fun `it should parse extend`() {
+        val file = ProtoFileParser.parseString("""
+            extend google.protobuf.FileOptions {
+                optional int32 source_retention_option = 1234
+                  [retention = RETENTION_SOURCE];
+            }
+        """)
+
+        assertEquals(1, file.extends.size)
+
+        with (file.extends.first()) {
+            assertEquals("google.protobuf.FileOptions", typeName)
+            assertEquals(1, fields.size)
+
+            assertEquals(int32Type, fields.first().type)
+            assertEquals("source_retention_option", fields.first().name)
+            assertEquals(1234, fields.first().number)
+
+            assertEquals("RETENTION_SOURCE", fields.first().options["retention"])
+        }
+    }
+
+    @Test
+    fun `it should process imports`() {
+        val typeResolver = TypeResolver()
+        val file = ProtoFileParser.parseFile(File("./test.proto"), typeResolver)
+
+        with(file.imports) {
+            assertEquals(Import.ImportType.DEFAULT, get(0).type)
+            assertEquals("import_test.proto", get(0).path)
+        }
+    }
+}
