@@ -16,7 +16,7 @@ internal class RendererTest {
     }
 
     @Test
-    fun `should `() {
+    fun `should render minimals`() {
         val file = ProtoFile(
             typeResolver = mockk(),
             syntax = "\"proto3\"",

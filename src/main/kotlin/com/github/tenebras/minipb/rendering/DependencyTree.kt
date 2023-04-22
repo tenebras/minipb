@@ -6,6 +6,7 @@ import com.github.tenebras.minipb.model.*
 class DependencyTree(val nodes: List<Node>) {
 
     fun hasType(typeName: String): Boolean = nodes.any { n -> n.findNestedByType(typeName) != null }
+    fun findByTypeNameOrNull(typeName: String): Node? = nodes.firstOrNull { it.findNestedByType(typeName) != null }
 
     companion object {
         fun of(typeResolver: TypeResolver, types: List<Type>): DependencyTree {

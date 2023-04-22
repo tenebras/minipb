@@ -4,7 +4,9 @@ class ReducingOptions (
     val includeMethods: List<MethodReference> = emptyList(),
     val excludedMethods: List<MethodReference> = emptyList(),
     val includeServices: List<String> = emptyList(),
-    val excludeServices: List<String> = emptyList()
+    val excludeServices: List<String> = emptyList(),
+    val forcedTypeNames: List<String> = emptyList(),
+    val ignoreServices: Boolean = false
 ) {
     fun isServiceAllowed(serviceName: String): Boolean {
         val isExcluded = excludeServices.isNotEmpty() && serviceName in excludeServices
