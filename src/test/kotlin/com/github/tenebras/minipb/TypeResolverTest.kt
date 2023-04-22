@@ -1,8 +1,6 @@
 package com.github.tenebras.minipb
 
 import com.github.tenebras.minipb.model.*
-import com.github.tenebras.minipb.util.message
-import com.github.tenebras.minipb.util.reference
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -13,9 +11,9 @@ internal class TypeResolverTest {
         val resolver = TypeResolver()
 
         with (resolver) {
-            add(message("Foo", fields = listOf(Field("test", reference("Bar"), 1))))
-            add(message("Bar", fields = listOf(Field("test", reference("Baz"), 1))))
-            add(message("Baz"))
+            add(MessageType("Foo", fields = listOf(Field("test", TypeReference("Bar"), 1))))
+            add(MessageType("Bar", fields = listOf(Field("test", TypeReference("Baz"), 1))))
+            add(MessageType("Baz"))
         }
 
         assertEquals(
@@ -29,14 +27,14 @@ internal class TypeResolverTest {
         val resolver = TypeResolver()
 
         with(resolver) {
-            add(message("Bar", "Foo"))
-            add(message("Baz", "Foo"))
-            add(message("Foo", fields = listOf(
-                Field("bar", reference("Bar", "Foo"), 1),
-                Field("baz", reference("Baz", "Foo"), 2),
-                Field("test", reference("Test"), 3)
+            add(MessageType("Bar", "Foo"))
+            add(MessageType("Baz", "Foo"))
+            add(MessageType("Foo", fields = listOf(
+                Field("bar", TypeReference("Bar", "Foo"), 1),
+                Field("baz", TypeReference("Baz", "Foo"), 2),
+                Field("test", TypeReference("Test"), 3)
             )))
-            add(message("Test"))
+            add(MessageType("Test"))
         }
 
         val foo = resolver.findOrNull("Foo") as MessageType

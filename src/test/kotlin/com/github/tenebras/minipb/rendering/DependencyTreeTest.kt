@@ -2,7 +2,6 @@ package com.github.tenebras.minipb.rendering
 
 import com.github.tenebras.minipb.TypeResolver
 import com.github.tenebras.minipb.model.*
-import com.github.tenebras.minipb.util.reference
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -46,7 +45,7 @@ internal class DependencyTreeTest {
     @Test
     fun `should fail when TypeReference used to build tree`() {
         assertThrows<IllegalStateException> {
-            DependencyTree.of(TypeResolver(), listOf(reference("Test")))
+            DependencyTree.of(TypeResolver(), listOf(TypeReference("Test")))
         }
 
         assertThrows<IllegalStateException> {
