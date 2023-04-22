@@ -4,9 +4,9 @@ import com.github.tenebras.minipb.model.MessageType
 import com.github.tenebras.minipb.parsing.ProtoFileParser
 import com.github.tenebras.minipb.rendering.ReducingOptions
 import com.github.tenebras.minipb.rendering.RenderType
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import java.io.File
 
 internal class FileReducerTest {
     @Test
@@ -46,5 +46,16 @@ internal class FileReducerTest {
             RenderType.REQUIRED,
             tree.findByTypeNameOrNull("com.example.FooResponse")!!.renderType
         )
+    }
+
+    @Test
+    fun `should separate services from different files`() {
+        val typeResolver = TypeResolver()
+        val file = ProtoFileParser.parseFile(File("./test.proto"), typeResolver)
+
+        val (reducedFile, _) = FileReducer(ReducingOptions()).reduce(file)
+
+        assertTrue(reducedFile.hasService("Test"))
+        assertFalse(reducedFile.hasService("Test1"))
     }
 }

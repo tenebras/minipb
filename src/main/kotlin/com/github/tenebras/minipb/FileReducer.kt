@@ -36,7 +36,9 @@ class FileReducer(private val reducingOptions: ReducingOptions) {
     private fun reduce(file: ProtoFile, dependencyTree: DependencyTree, services: List<Service>): ProtoFile {
         return file.copy(
             imports = file.imports.map { i -> i.copy(file = reduce(i.file, dependencyTree, services)) },
-            services = services.filter { it.packageName == file.packageName },
+            services = file.services.filter { s ->
+                services.any { s.name == it.name && s.packageName == it.packageName }
+            },
             types = file.types.filter { t -> dependencyTree.hasType(t.fullName()) }
         )
     }

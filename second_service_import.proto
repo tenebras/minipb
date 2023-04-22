@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package com.service.test.api;
+
+service Test1 {
+  rpc Foo(FooRequest) returns (stream FooResponse);
+}
+
+message FooRequest{}
+message FooResponse{}
