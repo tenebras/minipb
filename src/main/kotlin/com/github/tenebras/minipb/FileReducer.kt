@@ -19,6 +19,7 @@ class FileReducer(private val reducingOptions: ReducingOptions) {
             .map { s -> s.methods.map { m -> listOf(m.request, m.response) }.flatten() }
             .flatten()
             .distinct()
+
         val dependencyTree = DependencyTree.of(file.typeResolver, requiredTypes)
 
         return reduce(file, dependencyTree, allServices) to dependencyTree

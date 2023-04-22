@@ -58,7 +58,7 @@ class DependencyTree(val nodes: List<Node>) {
                     val oneOfTypes = type.oneOfs.map { o -> o.fields.map { it.type } }.flatten()
 
                     (fieldTypes + oneOfTypes)
-                        .filter { it is MessageType || it is EnumType }
+                        .filter { it is MessageType || it is EnumType || it is TypeReference }
                         .distinct()
                         .forEach { f ->
                             dependencyTree(typeResolver, f).forEach {

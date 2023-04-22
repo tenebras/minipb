@@ -1,6 +1,7 @@
 package com.github.tenebras.minipb.model
 
-class Reserved(
+// todo should be immutable
+data class Reserved(
     val names: MutableList<String> = mutableListOf(),
     val numbers: MutableList<Int> = mutableListOf(),
     val ranges: MutableList<IntRange> = mutableListOf()

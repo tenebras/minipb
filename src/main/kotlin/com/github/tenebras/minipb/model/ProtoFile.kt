@@ -5,15 +5,15 @@ import java.io.File
 
 
 data class ProtoFile(
-    val location: File?,
-    var syntax: String?,
-    var packageName: String?,
-    val options: Map<String, Any>,
-    val services: List<Service>,
-    val types: List<Type>,
-    val extends: List<Extend>,
-    val imports: List<Import>,
-    val typeResolver: TypeResolver
+    val typeResolver: TypeResolver,
+    val location: File? = null,
+    var syntax: String? = null,
+    var packageName: String? = null,
+    val options: Map<String, Any> = emptyMap(),
+    val services: List<Service> = emptyList(),
+    val types: List<Type> = emptyList(),
+    val extends: List<Extend> = emptyList(),
+    val imports: List<Import> = emptyList()
 ) {
     inline fun <reified T> type(name: String, packageName: String? = null): T {
         return types.first { it.name == name && it is T && it.packageName == packageName } as T

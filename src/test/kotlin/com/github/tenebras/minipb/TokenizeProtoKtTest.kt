@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 internal class TokenizeProtoKtTest {
 
     @Test
-    fun `it should ignore comments`() {
+    fun `should ignore comments`() {
         val tokens = tokenizeProto(
             """
             // single line comment

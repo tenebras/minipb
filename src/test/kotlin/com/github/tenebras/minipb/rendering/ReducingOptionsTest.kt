@@ -1,7 +1,5 @@
 package com.github.tenebras.minipb.rendering
 
-import com.github.tenebras.minipb.rendering.MethodReference
-import com.github.tenebras.minipb.rendering.ReducingOptions
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -9,7 +7,7 @@ import org.junit.jupiter.api.Test
 internal class ReducingOptionsTest {
 
     @Test
-    fun `it should allow any by default`() {
+    fun `should allow any by default`() {
         val options = ReducingOptions()
 
         assertTrue(options.isServiceAllowed("Test"))
@@ -17,7 +15,7 @@ internal class ReducingOptionsTest {
     }
 
     @Test
-    fun `it should allow only included`() {
+    fun `should allow only included`() {
         val options = ReducingOptions(
             includeServices = listOf("Test"),
             includeMethods = listOf(
@@ -32,8 +30,24 @@ internal class ReducingOptionsTest {
 
         assertTrue(options.isMethodAllowed("Test", "Get"))
         assertTrue(options.isMethodAllowed("Test", "Set"))
-        assertTrue(options.isMethodAllowed("Other", "Get"))
-        assertTrue(options.isMethodAllowed("Foo", "Get"))
+        assertFalse(options.isMethodAllowed("Other", "Get"))
+        assertFalse(options.isMethodAllowed("Foo", "Get"))
         assertFalse(options.isMethodAllowed("Foo", "Set"))
+    }
+
+    @Test
+    fun `should ignore excluded`() {
+        val options = ReducingOptions(
+            excludedMethods = listOf(
+                MethodReference.of("Get")
+            ),
+            excludeServices = listOf("Foo")
+        )
+
+        assertFalse(options.isServiceAllowed("Foo"))
+        assertTrue(options.isServiceAllowed("Allowed"))
+        assertFalse(options.isMethodAllowed("Foo", "Get"))
+        assertFalse(options.isMethodAllowed("Other", "Get"))
+        assertTrue(options.isMethodAllowed("Allowed", "Test"))
     }
 }

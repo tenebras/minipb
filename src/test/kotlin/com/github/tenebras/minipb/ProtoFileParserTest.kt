@@ -1,16 +1,16 @@
 package com.github.tenebras.minipb
 
-import com.github.tenebras.minipb.TypeResolver
 import com.github.tenebras.minipb.model.*
-import com.github.tenebras.minipb.parsing.*
+import com.github.tenebras.minipb.parsing.ProtoFileParser
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.io.File
 
 internal class ProtoFileParserTest {
 
     @Test
-    fun `it should read syntax package and options`() {
+    fun `should read syntax package and options`() {
         val file = ProtoFileParser.parseString(
             """
             syntax = "proto3";
@@ -41,7 +41,7 @@ internal class ProtoFileParserTest {
     }
 
     @Test
-    fun `it should parse reserved`() {
+    fun `should parse reserved`() {
         val reserved = ProtoFileParser.parseString(
             """
            message Test{
@@ -62,7 +62,7 @@ internal class ProtoFileParserTest {
     }
 
     @Test
-    fun `it should parse enum`() {
+    fun `should parse enum`() {
         val enum = ProtoFileParser.parseString(
             """
             enum Test {
@@ -70,7 +70,9 @@ internal class ProtoFileParserTest {
                 DEFAULT_VALUE = 0;
                 VALUE = 1;
                 VALUE_1 = 1[(custom_option) = "hello world"];
-            } 
+            }
+             
+             enum InvalidEmpty{}
         """
         ).type<EnumType>("Test")
 
@@ -86,7 +88,7 @@ internal class ProtoFileParserTest {
     }
 
     @Test
-    fun `it should read services`() {
+    fun `should read services`() {
         val file = ProtoFileParser.parseString(
             """
             syntax = "proto3";
@@ -155,7 +157,7 @@ internal class ProtoFileParserTest {
     }
 
     @Test
-    fun `it should parse complex message with basic fields`() {
+    fun `should parse complex message with basic fields`() {
         val file = ProtoFileParser.parseString(
             """
             syntax = "proto3";
@@ -204,7 +206,7 @@ internal class ProtoFileParserTest {
     }
 
     @Test
-    fun `it should parse embedded message and enum`() {
+    fun `should parse embedded message and enum`() {
         val typeResolver = TypeResolver()
         val file = ProtoFileParser.parseString(
             """
@@ -269,7 +271,7 @@ internal class ProtoFileParserTest {
     }
 
     @Test
-    fun `it should parse oneOf`() {
+    fun `should parse oneOf`() {
         val message = ProtoFileParser.parseString(
             """
             syntax = "proto3";
@@ -303,7 +305,7 @@ internal class ProtoFileParserTest {
     }
 
     @Test
-    fun `it should parse extend`() {
+    fun `should parse extend`() {
         val file = ProtoFileParser.parseString("""
             extend google.protobuf.FileOptions {
                 optional int32 source_retention_option = 1234
@@ -326,13 +328,66 @@ internal class ProtoFileParserTest {
     }
 
     @Test
-    fun `it should process imports`() {
+    fun `should process imports`() {
         val typeResolver = TypeResolver()
         val file = ProtoFileParser.parseFile(File("./test.proto"), typeResolver)
 
         with(file.imports) {
             assertEquals(Import.ImportType.DEFAULT, get(0).type)
             assertEquals("import_test.proto", get(0).path)
+
+            assertEquals(Import.ImportType.WEAK, get(1).type)
+            assertEquals("import_test.proto", get(1).path)
+
+            assertEquals(Import.ImportType.PUBLIC, get(2).type)
+            assertEquals("import_test.proto", get(2).path)
+        }
+    }
+
+    @Test
+    fun `should handle rpc method options`() {
+        val file = ProtoFileParser.parseString("""
+            syntax = "proto3";
+            
+            extend google.protobuf.MethodOptions {
+                Test msg = 50056;
+                int64 deadline = 18;
+            }
+            
+            service Foo {
+                rpc Baz(Test) returns (Test) {
+                    option deadline = x;
+                    option (msg).test = "test";
+                }
+                rpc Bar(Test) returns (Test){
+                    option test = x;
+                };
+                rpc Empty(Test) returns (Test);
+            }
+            
+            message Test {
+                string test = 1;
+            }
+        """)
+
+        val baz = file.service("Foo").method("Baz")
+        val bar = file.service("Foo").method("Bar")
+        val empty = file.service("Foo").method("Empty")
+
+        assertEquals("x", baz.options["deadline"])
+        assertEquals("\"test\"", baz.options["(msg).test"])
+        assertEquals("x", bar.options["test"])
+        assertTrue(empty.options.isEmpty())
+    }
+
+    @Test
+    fun `should fail on invalid token`() {
+        assertThrows<IllegalStateException> {
+            ProtoFileParser.parseString("""
+               syntax = "proto3";
+                
+               int32 fieldName = 1;
+            """)
         }
     }
 }

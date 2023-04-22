@@ -39,7 +39,11 @@ class Renderer {
                 val requestTypeName = m.request.fullName().replace(filePackageName, "")
                 val responseTypeName = m.response.fullName().replace(filePackageName, "")
 
-                "    rpc ${m.name} (${requestTypeName}) returns (${responseTypeName});"
+                if (m.options.isEmpty()) {
+                    "    rpc ${m.name} (${requestTypeName}) returns (${responseTypeName});"
+                } else {
+                    "    rpc ${m.name} (${requestTypeName}) returns (${responseTypeName}) {${m.options.renderOptions("        ")}    }"
+                }
             }
 
             builder.append("\nservice ${s.name} {${renderedMethods}\n}\n")
@@ -57,19 +61,15 @@ class Renderer {
     private fun Node.render(indent: String = "", filePackageName: String? = null): String {
         return when (type) {
             is MessageType -> {
-                val renderedFields = if (this.renderType == RenderType.REQUIRED && type.fields.isNotEmpty()) {
-                    "\n" + type.fields.joinToString("\n") { "$indent    " + it.render(type, filePackageName) }
-                } else ""
+
+                val renderedFields = if(renderType == RenderType.REQUIRED)
+                    type.fields.render("$indent    ", type, filePackageName)
+                else ""
 
                 val renderedOneOf = if(renderType == RenderType.REQUIRED && type.oneOfs.isNotEmpty()) {
                     type.oneOfs.joinToString("\n") {
-                        val renderedOptions = if (type.options.isNotEmpty()) {
-                            "\n" + it.options.map { "$indent        option ${it.key} = ${it.value};\n" }.joinToString()
-                        } else ""
-
-                        val fields = if (it.fields.isNotEmpty()) {
-                            "\n" + it.fields.joinToString("\n") { "$indent        " + it.render(type, filePackageName) } + "\n"
-                        } else ""
+                        val renderedOptions = type.options.renderOptions("$indent        ")
+                        val fields = it.fields.render("$indent        ", type, filePackageName)
 
                         "\n\n${indent}    oneof ${it.name}{${renderedOptions}${fields}${indent}    }"
                     } + "\n"
@@ -79,16 +79,12 @@ class Renderer {
                     "\n" + nested.joinToString("\n") { it.render("$indent    ") }
                 } else ""
 
-                val renderedOptions = if (type.options.isNotEmpty()) {
-                    "\n" + type.options.map { "option ${it.key} = ${it.value};\n" }.joinToString()
-                } else ""
+                val renderedOptions = type.options.renderOptions("$indent    ")
 
                 "\n${indent}message ${type.name} {$renderedOptions${renderedFields}${renderedOneOf}${nestedTypes}\n$indent}"
             }
             is EnumType -> {
-                val renderedOptions = if (type.options.isNotEmpty()) {
-                    type.options.map { "option ${it.key} = ${it.value};\n" }.joinToString()
-                } else ""
+                val renderedOptions = type.options.renderOptions("$indent    ")
 
                 val renderedValues = if (type.values.isNotEmpty()) {
                     "\n$indent    " + type.values.joinToString("\n$indent    ") {
@@ -134,5 +130,16 @@ class Renderer {
         }
 
         return "$prefix${typeName} $name = $number$renderedOptions;"
+    }
+
+    private fun Map<String, Any>.renderOptions(indent: String): String
+        = if (isNotEmpty()) {
+            "\n" + this.map { "${indent}option ${it.key} = ${it.value};" }.joinToString("\n") + "\n"
+        } else ""
+
+    private fun List<Field>.render(indent: String, type: Type?, filePackageName: String?): String {
+        return if (isNotEmpty()) {
+            "\n" + joinToString("\n") { indent + it.render(type, filePackageName) }
+        } else ""
     }
 }

@@ -1,10 +1,11 @@
 package com.github.tenebras.minipb
 
-import com.github.tenebras.minipb.model.Field
-import com.github.tenebras.minipb.model.MessageType
-import com.github.tenebras.minipb.model.TypeReference
+import com.github.tenebras.minipb.model.*
+import com.github.tenebras.minipb.util.message
+import com.github.tenebras.minipb.util.reference
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 internal class TypeResolverTest {
     @Test
@@ -12,9 +13,9 @@ internal class TypeResolverTest {
         val resolver = TypeResolver()
 
         with (resolver) {
-            add(mt("Foo", fields = listOf(Field("test", tr("Bar"), 1))))
-            add(mt("Bar", fields = listOf(Field("test", tr("Baz"), 1))))
-            add(mt("Baz"))
+            add(message("Foo", fields = listOf(Field("test", reference("Bar"), 1))))
+            add(message("Bar", fields = listOf(Field("test", reference("Baz"), 1))))
+            add(message("Baz"))
         }
 
         assertEquals(
@@ -28,14 +29,14 @@ internal class TypeResolverTest {
         val resolver = TypeResolver()
 
         with(resolver) {
-            add(mt("Bar", "Foo"))
-            add(mt("Baz", "Foo"))
-            add(mt("Foo", fields = listOf(
-                Field("bar", tr("Bar", "Foo"), 1),
-                Field("baz", tr("Baz", "Foo"), 2),
-                Field("test", tr("Test"), 3)
+            add(message("Bar", "Foo"))
+            add(message("Baz", "Foo"))
+            add(message("Foo", fields = listOf(
+                Field("bar", reference("Bar", "Foo"), 1),
+                Field("baz", reference("Baz", "Foo"), 2),
+                Field("test", reference("Test"), 3)
             )))
-            add(mt("Test"))
+            add(message("Test"))
         }
 
         val foo = resolver.findOrNull("Foo") as MessageType
@@ -51,8 +52,20 @@ internal class TypeResolverTest {
         )
     }
 
-    private fun tr(name: String, packageName: String? = null)
-        = TypeReference(name, packageName)
-    private fun mt(name: String, packageName: String? = null, fields: List<Field> = emptyList())
-        = MessageType(name, packageName, fields = fields)
+    @Test
+    fun `should fail on non user defined types`() {
+        val resolver = TypeResolver()
+
+        assertThrows<IllegalStateException> {
+            resolver.add(TypeReference("test"))
+        }
+
+        assertThrows<IllegalStateException> {
+            resolver.add(stringType)
+        }
+
+        assertThrows<IllegalStateException> {
+            resolver.add(MapType(stringType, stringType))
+        }
+    }
 }

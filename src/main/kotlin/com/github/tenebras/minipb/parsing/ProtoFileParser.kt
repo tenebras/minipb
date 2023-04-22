@@ -34,135 +34,27 @@ class ProtoFileParser(
         val tokens = tokenizeProto(content)
 
         while (idx < tokens.size) {
-
             when (tokens[idx]) {
                 "syntax" -> {
                     syntax = tokens[idx + 2]
                     idx += 3
                 }
-
                 "package" -> {
                     packageName = tokens[idx + 1]
                     idx += 2
                 }
-
                 "option" -> tokens.readOption().let { options[it.first] = it.second }
-
-                "extend" -> {
-                    val type = tokens[idx + 1]
-                    val extendFields = mutableListOf<Field>()
-                    idx += 3
-
-                    while (tokens[idx] != "}") {
-                        extendFields.add(tokens.readField(packageName))
-                        idx++
-                    }
-
-                    extends.add(
-                        Extend(
-                            typeName = type,
-                            fields = extendFields
-                        )
-                    )
-                }
-
-                "import" -> {
-                    val importType = when (tokens[idx + 1]) {
-                        "public" -> Import.ImportType.PUBLIC
-                        "weak" -> Import.ImportType.WEAK
-                        else -> Import.ImportType.DEFAULT
-                    }
-
-                    if (importType != Import.ImportType.DEFAULT) {
-                        idx++
-                    }
-
-                    val path = tokens[idx + 1].trim('"')
-
-                    imports.add(
-                        Import(
-                            type = importType,
-                            path = path,
-                            file = parseFile(
-                                File(location?.parent?.let { "$it/$path" } ?: "./$path"),
-                                typeResolver
-                            )
-                        )
-                    )
-
-                    idx += 2
-                }
-
-                "service" -> {
-                    val serviceName = tokens[idx + 1]
-                    val methods = mutableListOf<Method>()
-
-                    idx += 3
-
-                    var name: String
-                    var request: Type?
-                    var response: Type?
-                    var isRequestStreamed: Boolean
-                    var isResponseStreamed: Boolean
-
-                    while (tokens[idx] != "}") {
-                        name = tokens[++idx]
-
-                        if (tokens[idx + 2] == "stream") {
-                            isRequestStreamed = true
-                            request = TypeReference(tokens[idx + 3], packageName)
-                            idx += 7
-                        } else {
-                            isRequestStreamed = false
-                            request = TypeReference(tokens[idx + 2], packageName)
-                            idx += 6
-                        }
-
-                        if (tokens[idx] == "stream") {
-                            isResponseStreamed = true
-                            response = TypeReference(tokens[idx + 1], packageName)
-                            idx++
-                        } else {
-                            isResponseStreamed = false
-                            response = TypeReference(tokens[idx], packageName)
-                        }
-
-                        methods.add(
-                            Method(
-                                name = name,
-                                request = request,
-                                response = response,
-                                isRequestStreamed = isRequestStreamed,
-                                isResponseStreamed = isResponseStreamed
-                            )
-                        )
-
-                        // rpc Method(Request) returns (Response);
-                        // rpc Method(Request) returns (Response) {};
-                        // rpc Method(Request) returns (Response) {}
-
-                        idx += when {
-                            tokens[idx + 2] == ";" -> 3
-                            tokens[idx + 2] == "{" && tokens[idx + 4] == ";" -> 5
-                            else -> 4
-                        }
-                    }
-
-                    services.add(
-                        Service(serviceName, methods, packageName)
-                    )
-                }
-
+                "extend" -> extends.add(tokens.readExtend())
+                "import" -> imports.add(tokens.readImport())
+                "service" -> services.add(tokens.readService())
                 "enum" -> tokens.readEnum(packageName).let {
                     types.add(it)
                     typeResolver.add(it)
                 }
-
                 "message" -> tokens.readMessage(packageName).let {
                     types.add(it)
                     typeResolver.add(it)
                 }
-
                 else -> {
                     throw IllegalStateException("Can't handle token '${tokens[idx]}' in this context. file=${location}, idx=$idx")
                 }
@@ -319,7 +211,7 @@ class ProtoFileParser(
     private fun List<String>.readEnum(packageName: String?): EnumType {
         val name = this[idx + 1]
         val options = mutableMapOf<String, Any>()
-        val values = mutableListOf<EnumType.EnumValue>()
+        val values = mutableListOf<EnumType.Value>()
         val reserved = Reserved()
 
         idx += 3
@@ -327,22 +219,18 @@ class ProtoFileParser(
         while (this[idx] != "}") {
             when (this[idx]) {
                 "option" -> readOption().let { options[it.first] = it.second }
-                "reserved" -> readReserved().let { reserved.add(it) }
+                "reserved" -> reserved.add(readReserved())
                 else -> {
                     val label = this[idx]
-
-                    if (this[idx + 2] == ";") {
-                        println()
-                    }
 
                     val number = this[idx + 2].toInt()
                     val fieldOptions = if (this[idx + 3] == "[") {
                         var offset = 3
                         while (this[idx + (++offset)] != "]");
 
-                        subList(idx + 4, idx + offset).joinToString("").split(',').map { expression ->
+                        subList(idx + 4, idx + offset).joinToString("").split(',').associate { expression ->
                             expression.split('=').let { it.first() to it.last() }
-                        }.toMap().also {
+                        }.also {
                             idx += offset + 1
                         }
                     } else {
@@ -351,7 +239,7 @@ class ProtoFileParser(
                     }
 
                     values.add(
-                        EnumType.EnumValue(
+                        EnumType.Value(
                             label = label,
                             number = number,
                             options = fieldOptions
@@ -419,5 +307,120 @@ class ProtoFileParser(
         }
 
         return reserved
+    }
+
+    private fun List<String>.readService(): Service {
+        val serviceName = this[idx + 1]
+        val methods = mutableListOf<Method>()
+
+        idx += 3
+
+        var name: String
+        var request: Type?
+        var response: Type?
+        var isRequestStreamed: Boolean
+        var isResponseStreamed: Boolean
+
+        while (this[idx] != "}") {
+            name = this[++idx]
+
+            if (this[idx + 2] == "stream") {
+                isRequestStreamed = true
+                request = TypeReference(this[idx + 3], packageName)
+                idx += 7
+            } else {
+                isRequestStreamed = false
+                request = TypeReference(this[idx + 2], packageName)
+                idx += 6
+            }
+
+            if (this[idx] == "stream") {
+                isResponseStreamed = true
+                response = TypeReference(this[idx + 1], packageName)
+                idx++
+            } else {
+                isResponseStreamed = false
+                response = TypeReference(this[idx], packageName)
+            }
+
+            val methodOptions = mutableMapOf<String, Any>()
+
+            // rpc Method(Request) returns (Response);
+            // rpc Method(Request) returns (Response) {};
+            // rpc Method(Request) returns (Response) {option test = 1;}
+            // rpc Method(Request) returns (Response) {}
+
+            when {
+                this[idx + 2] == ";" -> idx += 3
+                this[idx + 2] == "{" && this[idx + 4] == ";" -> idx += 5
+                this[idx + 2] == "{" && this[idx + 3] == "option" -> {
+                    idx += 3
+
+                    while (this[idx] != "}") {
+                        readOption().let {
+                            methodOptions[it.first] = it.second
+                        }
+
+                        idx++
+                    }
+
+                    if (this[idx +1] == ";") idx += 2 else idx++
+                }
+                else -> idx += 4
+            }
+
+            methods.add(
+                Method(
+                    name = name,
+                    request = request,
+                    response = response,
+                    isRequestStreamed = isRequestStreamed,
+                    isResponseStreamed = isResponseStreamed,
+                    options = methodOptions
+                )
+            )
+        }
+
+        return Service(serviceName, methods, packageName)
+    }
+
+    private fun List<String>.readImport(): Import {
+        val importType = when (this[idx + 1]) {
+            "public" -> Import.ImportType.PUBLIC
+            "weak" -> Import.ImportType.WEAK
+            else -> Import.ImportType.DEFAULT
+        }
+
+        if (importType != Import.ImportType.DEFAULT) {
+            idx++
+        }
+
+        val path = this[idx + 1].trim('"')
+        idx += 2
+
+        return Import(
+            type = importType,
+            path = path,
+            file = parseFile(
+                File(location?.parent?.let { "$it/$path" } ?: "./$path"),
+                typeResolver
+            )
+        )
+    }
+
+    private fun List<String>.readExtend(): Extend {
+        val type = this[idx + 1]
+        val extendFields = mutableListOf<Field>()
+        idx += 3
+
+        while (this[idx] != "}") {
+            extendFields.add(this.readField(packageName))
+            idx++
+        }
+
+        return Extend(
+            typeName = type,
+            fields = extendFields
+        )
     }
 }

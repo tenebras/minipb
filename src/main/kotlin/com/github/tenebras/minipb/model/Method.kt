@@ -4,6 +4,7 @@ data class Method (
     val name: String,
     val request: Type,
     val response: Type,
-    val isRequestStreamed: Boolean,
-    val isResponseStreamed: Boolean
+    val isRequestStreamed: Boolean = false,
+    val isResponseStreamed: Boolean = false,
+    val options: Map<String, Any> = emptyMap()
 )

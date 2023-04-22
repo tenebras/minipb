@@ -3,7 +3,7 @@ package com.github.tenebras.minipb.model
 data class OneOf(
     val name: String,
     val fields: List<Field>,
-    val options: Map<String, Any>
+    val options: Map<String, Any> = emptyMap()
 ) {
     fun hasField(name: String): Boolean = fields.any { it.name == name }
     fun hasField(number: Int): Boolean = fields.any { it.number == number }

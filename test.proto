@@ -3,6 +3,8 @@ syntax = "proto3";
 package com.service.test.api;
 
 import "import_test.proto";
+import weak "import_test.proto";
+import public "import_test.proto";
 
 option java_multiple_files = false;
 option java_package = "com.service.test.api";

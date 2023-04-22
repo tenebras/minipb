@@ -24,8 +24,6 @@ class TypeResolver {
         types[bytesType.name] = bytesType
     }
 
-    fun knownTypes(): List<Type> = types.values.toList()
-
     fun add(type: Type) {
         if (type is TypeReference || type is BuiltInType || type is MapType) {
             error(
@@ -41,34 +39,36 @@ class TypeResolver {
         } else type
 
         if ((types[type.fullName()] as? MessageType)?.hasTypeReferences() == true) {
-            val currentType = types[type.fullName()] as MessageType
-
-            references.compute(type.fullName()) { _, list ->
-                (list ?: mutableListOf()).apply {
-                    (currentType.fields + currentType.oneOfs.map { it.fields }.flatten())
-                        .map {
-                            if (it.type is TypeReference) {
-                                listOf(it.type)
-                            } else if (it.type is MapType && it.type.hasTypeReferences()) {
-                                listOfNotNull(
-                                    it.type.keyType.takeIf { t -> t is TypeReference } as? TypeReference,
-                                    it.type.valueType.takeIf { t -> t is TypeReference } as? TypeReference
-                                )
-                            } else {
-                                emptyList()
-                            }
-                        }
-                        .flatten()
-                        .distinct()
-                        .forEach {
-                            if (!contains(it)) {
-                                add(it)
-                            }
-                        }
-                }
-            }
+            computeReferences(types[type.fullName()] as MessageType)
         } else {
             updateReferences(types[type.fullName()]!!)
+        }
+    }
+
+    private fun computeReferences(currentType: MessageType) {
+        references.compute(currentType.fullName()) { _, list ->
+            (list ?: mutableListOf()).apply {
+                (currentType.fields + currentType.oneOfs.map { it.fields }.flatten())
+                    .map {
+                        if (it.type is TypeReference) {
+                            listOf(it.type)
+                        } else if (it.type is MapType && it.type.hasTypeReferences()) {
+                            listOfNotNull(
+                                it.type.keyType.takeIf { t -> t is TypeReference } as? TypeReference,
+                                it.type.valueType.takeIf { t -> t is TypeReference } as? TypeReference
+                            )
+                        } else {
+                            emptyList()
+                        }
+                    }
+                    .flatten()
+                    .distinct()
+                    .forEach {
+                        if (!contains(it)) {
+                            add(it)
+                        }
+                    }
+            }
         }
     }
 

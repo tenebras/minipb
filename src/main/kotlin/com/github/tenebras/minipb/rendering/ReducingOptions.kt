@@ -14,6 +14,10 @@ class ReducingOptions (
     }
 
     fun isMethodAllowed(serviceName: String, methodName: String): Boolean {
+        if (!isServiceAllowed(serviceName)) {
+            return false
+        }
+
         val isExcluded = excludedMethods.isNotEmpty() && excludedMethods.any {
             it.methodName == methodName && (it.serviceName == serviceName || it.serviceName == null)
         }

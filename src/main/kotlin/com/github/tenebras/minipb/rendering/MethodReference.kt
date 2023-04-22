@@ -6,7 +6,6 @@ class MethodReference(
 ) {
     companion object {
         fun of(serviceAndMethod: String): MethodReference {
-
             if (serviceAndMethod.contains('.')) {
                 return serviceAndMethod.split('.').let {
                     MethodReference(it.last(), it.first())
