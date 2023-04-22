@@ -340,7 +340,7 @@ internal class ProtoFileParserTest {
             assertEquals("import_test.proto", get(1).path)
 
             assertEquals(Import.ImportType.PUBLIC, get(2).type)
-            assertEquals("import_test.proto", get(2).path)
+            assertEquals("second_service_import.proto", get(2).path)
         }
     }
 
