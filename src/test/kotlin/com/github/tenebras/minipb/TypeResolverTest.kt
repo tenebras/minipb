@@ -27,7 +27,12 @@ internal class TypeResolverTest {
         val resolver = TypeResolver()
 
         with(resolver) {
-            add(MessageType("Bar", "Foo"))
+            add(MessageType("Bar", "Foo", fields = listOf(
+                Field("map", MapType(TypeReference("Baz", "Foo"), TypeReference("Bar", "Foo")), 4),
+                Field("map1", MapType(TypeReference("Baz", "Foo"), stringType), 5),
+                Field("map2", MapType(stringType, TypeReference("Baz", "Foo")), 6),
+                Field("map3", MapType(stringType, stringType), 7)
+            )))
             add(MessageType("Baz", "Foo"))
             add(MessageType("Foo", fields = listOf(
                 Field("bar", TypeReference("Bar", "Foo"), 1),

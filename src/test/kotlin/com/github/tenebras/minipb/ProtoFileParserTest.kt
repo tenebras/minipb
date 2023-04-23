@@ -42,7 +42,7 @@ internal class ProtoFileParserTest {
 
     @Test
     fun `should parse reserved`() {
-        val reserved = ProtoFileParser.parseString(
+        val file = ProtoFileParser.parseString(
             """
            message Test{
                 reserved 8;
@@ -53,12 +53,31 @@ internal class ProtoFileParserTest {
                 reserved "foo", "bar";
                 reserved "too";
             } 
+            
+            enum Test1 {
+                DEFAULT = 0;
+                reserved 8;
+                reserved 13, 14;
+                reserved 66 to 76;
+                reserved 20 to 22, 23 to 25;
+                reserved 2, 15, 9 to 11, 80 to max;
+                reserved "foo", "bar";
+                reserved "too";
+            }
         """
-        ).type<MessageType>("Test").reserved
+        )
 
-        assertEquals(listOf("foo", "bar", "too"), reserved.names)
-        assertEquals(listOf(8, 13, 14, 2, 15), reserved.numbers)
-        assertEquals(listOf(66..76, 20..22, 23..25, 9..11, 80..536_870_911), reserved.ranges)
+        with(file.type<MessageType>("Test").reserved) {
+            assertEquals(listOf("foo", "bar", "too"), names)
+            assertEquals(listOf(8, 13, 14, 2, 15), numbers)
+            assertEquals(listOf(66..76, 20..22, 23..25, 9..11, 80..536_870_911), ranges)
+        }
+
+        with(file.type<EnumType>("Test1").reserved) {
+            assertEquals(listOf("foo", "bar", "too"), names)
+            assertEquals(listOf(8, 13, 14, 2, 15), numbers)
+            assertEquals(listOf(66..76, 20..22, 23..25, 9..11, 80..536_870_911), ranges)
+        }
     }
 
     @Test

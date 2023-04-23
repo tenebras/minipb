@@ -140,35 +140,35 @@ class ProtoFileParser(
 
     private fun List<String>.readMessage(rootPackageName: String?): MessageType {
         val messageName = this[idx + 1]
-        val reserved = Reserved()
         val fields = mutableListOf<Field>()
         val packageName = rootPackageName?.let { "${it}.$messageName" } ?: messageName
         val oneOfs = mutableListOf<OneOf>()
         val options = mutableMapOf<String, Any>()
+        val reservedNames = mutableListOf<String>()
+        val reservedNumbers = mutableListOf<Int>()
+        val reservedRanges = mutableListOf<IntRange>()
         idx += 3
 
         while (this[idx] != "}") {
             when (this[idx]) {
-                "reserved" -> readReserved().let { reserved.add(it) }
-
+                "reserved" -> readReserved().let {
+                    reservedNames.addAll(it.names)
+                    reservedNumbers.addAll(it.numbers)
+                    reservedRanges.addAll(it.ranges)
+                }
                 "repeated", "optional" -> fields.add(readField(packageName))
-
                 "oneof" -> oneOfs.add(readOneOf(packageName))
-
                 "option" -> readOption().let {
                     options[it.first] = it.second
                 }
-
                 "message" -> readMessage(packageName).let {
                     types.add(it)
                     typeResolver.add(it)
                 }
-
                 "enum" -> readEnum(packageName).let {
                     types.add(it)
                     typeResolver.add(it)
                 }
-
                 else -> fields.add(readField(packageName))
             }
 
@@ -178,7 +178,11 @@ class ProtoFileParser(
         return MessageType(
             name = messageName,
             packageName = rootPackageName,
-            reserved = reserved,
+            reserved = Reserved(
+                names = reservedNames,
+                numbers = reservedNumbers,
+                ranges = reservedRanges
+            ),
             fields = fields,
             oneOfs = oneOfs,
             options = options
@@ -212,14 +216,20 @@ class ProtoFileParser(
         val name = this[idx + 1]
         val options = mutableMapOf<String, Any>()
         val values = mutableListOf<EnumType.Value>()
-        val reserved = Reserved()
+        val reservedNames = mutableListOf<String>()
+        val reservedNumbers = mutableListOf<Int>()
+        val reservedRanges = mutableListOf<IntRange>()
 
         idx += 3
 
         while (this[idx] != "}") {
             when (this[idx]) {
                 "option" -> readOption().let { options[it.first] = it.second }
-                "reserved" -> reserved.add(readReserved())
+                "reserved" -> readReserved().let {
+                    reservedNames.addAll(it.names)
+                    reservedNumbers.addAll(it.numbers)
+                    reservedRanges.addAll(it.ranges)
+                }
                 else -> {
                     val label = this[idx]
 
@@ -258,7 +268,7 @@ class ProtoFileParser(
             packageName = packageName,
             values = values,
             options = options,
-            reserved = reserved
+            reserved = Reserved(reservedNames, reservedNumbers, reservedRanges)
         )
     }
 
@@ -281,20 +291,22 @@ class ProtoFileParser(
     }
 
     private fun List<String>.readReserved(): Reserved {
-        val reserved = Reserved()
+        val names = mutableListOf<String>()
+        val ranges = mutableListOf<IntRange>()
+        val numbers = mutableListOf<Int>()
 
         idx++
         while (this[idx] != ";") {
             if (this[idx + 1] == "," || this[idx + 1] == ";") {
                 if (this[idx][0] == '"') {
-                    reserved.add(this[idx].trim('"'))
+                    names.add(this[idx].trim('"'))
                 } else {
-                    reserved.add(this[idx].toInt())
+                    numbers.add(this[idx].toInt())
                 }
             } else if (this[idx + 1] == "to") {
                 val end = if (this[idx + 2] == "max") 536_870_911 else this[idx + 2].toInt()
 
-                reserved.add(this[idx].toInt()..end)
+                ranges.add(this[idx].toInt()..end)
 
                 idx += 2
             }
@@ -306,7 +318,7 @@ class ProtoFileParser(
             }
         }
 
-        return reserved
+        return Reserved(names, numbers, ranges)
     }
 
     private fun List<String>.readService(): Service {

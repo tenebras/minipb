@@ -6,8 +6,11 @@ import com.github.tenebras.minipb.rendering.Renderer
 import java.io.File
 import java.nio.file.Files
 
-class FileWriter(private val outputFolder: File, private val clearOutput: Boolean) {
-    private val renderer = Renderer()
+class FileWriter(
+    private val outputFolder: File,
+    private val clearOutput: Boolean,
+    private val renderer: Renderer = Renderer()
+) {
     private var isOutputCleared = false
 
     fun write(protoFile: ProtoFile, dependencyTree: DependencyTree) {
