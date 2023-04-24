@@ -13,6 +13,6 @@ data class EnumType(
     data class Value (
         val label: String,
         val number: Int,
-        val options: Map<String, Any>
+        val options: Map<String, Any> = emptyMap()
     )
 }
