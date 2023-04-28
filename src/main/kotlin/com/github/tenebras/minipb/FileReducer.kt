@@ -16,7 +16,7 @@ class FileReducer(private val reducingOptions: ReducingOptions) {
                         methods = s.methods.filter { m -> reducingOptions.isMethodAllowed(s.name, m.name) }
                     )
                 else null
-            }
+            }.filter { it.methods.isNotEmpty() }
         }
 
         val serviceTypes = allServices
@@ -36,8 +36,8 @@ class FileReducer(private val reducingOptions: ReducingOptions) {
     private fun reduce(file: ProtoFile, dependencyTree: DependencyTree, services: List<Service>): ProtoFile {
         return file.copy(
             imports = file.imports.map { i -> i.copy(file = reduce(i.file, dependencyTree, services)) },
-            services = file.services.filter { s ->
-                services.any { s.name == it.name && s.packageName == it.packageName }
+            services = services.filter { s ->
+                file.services.any { s.name == it.name && s.packageName == it.packageName }
             },
             types = file.types.filter { t -> dependencyTree.hasType(t.fullName()) }
         )

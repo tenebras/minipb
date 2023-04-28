@@ -115,7 +115,9 @@ class TypeResolver {
             }
         } else if (type is MapType && type.hasTypeReferences()) {
             val keyType = find(type.keyType.name, type.keyType.packageName)
+                .takeIf { it !is MessageType || !it.hasTypeReferences() } ?: type.keyType
             val valueType = find(type.valueType.name, type.valueType.packageName)
+                .takeIf { it !is MessageType || !it.hasTypeReferences() } ?: type.valueType
 
             if (keyType !is TypeReference && valueType !is TypeReference) {
                 references.computeIfPresent(parentTypeName) { _, list ->
