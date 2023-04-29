@@ -255,14 +255,14 @@ internal class ProtoFileParserTest {
               message Two {
                 message Three {
                   string test_string_field = 1;
-                }
-              }
+                };
+              };
             }
             
             enum RootEnum {
                 DEFAULT_VALUE = 0;
                 VALUE = 1;
-            }
+            };
         """,
             typeResolver
         )
@@ -300,8 +300,8 @@ internal class ProtoFileParserTest {
                     option (my_option.a) = 54321;
                     string id = 1[deprecated=true, packed=false];
                     uint32 number = 2;
-                }
-            }
+                };
+            };
         """
         ).type<MessageType>("GetRequest")
 

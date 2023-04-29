@@ -3,6 +3,7 @@ package com.github.tenebras.minipb.parsing
 import com.github.tenebras.minipb.TypeResolver
 import com.github.tenebras.minipb.model.*
 import org.intellij.lang.annotations.Language
+import java.io.BufferedReader
 import java.io.File
 import java.nio.charset.StandardCharsets
 
@@ -175,6 +176,9 @@ class ProtoFileParser(
             idx++
         }
 
+        // };
+        if (getOrNull(idx + 1) == ";") idx++
+
         return MessageType(
             name = messageName,
             packageName = rootPackageName,
@@ -204,6 +208,9 @@ class ProtoFileParser(
 
             idx++
         }
+
+        // };
+        if (getOrNull(idx + 1) == ";") idx++
 
         return OneOf(
             name = name,
@@ -258,10 +265,11 @@ class ProtoFileParser(
                 }
             }
 
-            if (this[idx] == ";") {
-                idx++
-            }
+            if (this[idx] == ";") idx++
         }
+
+        // };
+        if (getOrNull(idx + 1) == ";") idx++
 
         return EnumType(
             name = name,
@@ -408,15 +416,26 @@ class ProtoFileParser(
         }
 
         val path = this[idx + 1].trim('"')
+
         idx += 2
+
+        val file = File(location?.parent?.let { "$it/$path" } ?: "./$path")
+        val parsedFile = when {
+            file.exists() -> parseFile(File(path), typeResolver)
+            path.startsWith("google/protobuf/") -> {
+                val content = ProtoFileParser::class.java.classLoader.getResourceAsStream(path)
+                    ?.bufferedReader()
+                    ?.use(BufferedReader::readText) ?: error("Imported file [$path] not found")
+
+                parseString(content, typeResolver)
+            }
+            else -> throw IllegalArgumentException("Imported file [$path] not found")
+        }
 
         return Import(
             type = importType,
             path = path,
-            file = parseFile(
-                File(location?.parent?.let { "$it/$path" } ?: "./$path"),
-                typeResolver
-            )
+            file = parsedFile
         )
     }
 

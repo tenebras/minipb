@@ -22,9 +22,11 @@ class FileWriter(
             Files.createDirectories(outputFolder.toPath())
         }
 
-        (protoFile.importedFiles() + protoFile).forEach {
-            File(outputFolder, it.location!!.name).writeText(renderer.render(it, dependencyTree))
-        }
+        (protoFile.importedFiles() + protoFile)
+            .filter { it.location != null }
+            .forEach {
+                File(outputFolder, it.location!!.name).writeText(renderer.render(it, dependencyTree))
+            }
     }
 
     private fun ProtoFile.importedFiles(): List<ProtoFile> {
