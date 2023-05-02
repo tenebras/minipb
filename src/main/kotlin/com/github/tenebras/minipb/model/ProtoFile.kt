@@ -13,7 +13,8 @@ data class ProtoFile(
     val services: List<Service> = emptyList(),
     val types: List<Type> = emptyList(),
     val extends: List<Extend> = emptyList(),
-    val imports: List<Import> = emptyList()
+    val imports: List<Import> = emptyList(),
+    val headerComments: List<Comment> = emptyList()
 ) {
     inline fun <reified T> type(name: String, packageName: String? = null): T {
         return types.first { it.name == name && it is T && it.packageName == packageName } as T

@@ -6,7 +6,8 @@ data class MessageType(
     val reserved: Reserved = Reserved(),
     val fields: List<Field> = emptyList(),
     val oneOfs: List<OneOf> = emptyList(),
-    val options: Map<String, Any> = emptyMap()
+    val options: Map<String, Any> = emptyMap(),
+    val comments:List<Comment> = emptyList()
 ) : Type {
     private val allFields by lazy { fields + oneOfs.map { it.fields }.flatten() }
 

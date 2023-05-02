@@ -5,7 +5,8 @@ data class EnumType(
     override val packageName: String? = null,
     val values: List<Value> = emptyList(),
     val options: Map<String, Any> = emptyMap(),
-    val reserved: Reserved = Reserved()
+    val reserved: Reserved = Reserved(),
+    val comments: List<Comment> = emptyList()
 ) : Type {
     fun value(label: String): Value = values.first { it.label == label }
     fun value(number: Int): Value = values.first { it.number == number }

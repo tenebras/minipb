@@ -20,29 +20,53 @@ class ProtoFileParser(
     private val types = mutableListOf<Type>()
     private val extends = mutableListOf<Extend>()
     private val imports = mutableListOf<Import>()
+    private val collectedComments = mutableListOf<Comment>()
+    private val headerComments = mutableListOf<Comment>()
 
     companion object {
-        fun parseString(@Language("protobuf") content: String, typeResolver: TypeResolver = TypeResolver()): ProtoFile {
-            return ProtoFileParser(null, typeResolver).parse(content)
+        fun parseString(
+            @Language("protobuf") content: String,
+            typeResolver: TypeResolver = TypeResolver(),
+            includeComments: Boolean = false
+        ): ProtoFile {
+            return ProtoFileParser(null, typeResolver)
+                .parse(tokenizeProto(content, includeComments))
         }
 
-        fun parseFile(file: File, typeResolver: TypeResolver = TypeResolver()): ProtoFile {
-            return ProtoFileParser(file, typeResolver).parse(file.readText(StandardCharsets.UTF_8))
+        fun parseFile(
+            file: File,
+            typeResolver: TypeResolver = TypeResolver(),
+            includeComments: Boolean = false
+        ): ProtoFile {
+            return ProtoFileParser(file, typeResolver)
+                .parse(tokenizeProto(file.readText(StandardCharsets.UTF_8), includeComments))
         }
     }
 
-    fun parse(content: String): ProtoFile {
-        val tokens = tokenizeProto(content)
-
+    private fun parse(tokens: List<String>): ProtoFile {
         while (idx < tokens.size) {
             when (tokens[idx]) {
+                "…" -> {
+                    collectedComments.add(tokens[idx + 1].toComment())
+                    idx++
+                }
                 "syntax" -> {
                     syntax = tokens[idx + 2]
                     idx += 3
+
+                    if (collectedComments.isNotEmpty()) {
+                        headerComments.addAll(collectedComments)
+                        collectedComments.clear()
+                    }
                 }
                 "package" -> {
                     packageName = tokens[idx + 1]
                     idx += 2
+
+                    if (collectedComments.isNotEmpty()) {
+                        headerComments.addAll(collectedComments)
+                        collectedComments.clear()
+                    }
                 }
                 "option" -> tokens.readOption().let { options[it.first] = it.second }
                 "extend" -> extends.add(tokens.readExtend())
@@ -88,7 +112,8 @@ class ProtoFileParser(
                 )
             },
             imports = imports,
-            typeResolver = typeResolver
+            typeResolver = typeResolver,
+            headerComments = headerComments
         )
     }
 
@@ -118,15 +143,13 @@ class ProtoFileParser(
         idx += 4
 
         if (this[idx] == "[") {
-            idx++
-            while (this[idx] != ";") {
-                options[this[idx]] = this[idx + 2]
-                idx += 3
+            options.putAll(readFieldOptions())
+        }
 
-                if (this[idx] == "," || this[idx] == "]") {
-                    idx++
-                }
-            }
+        if (this[idx + 1] == "…") {
+            idx++
+            readAfterComments()
+            idx--
         }
 
         return Field(
@@ -135,7 +158,8 @@ class ProtoFileParser(
             number = number,
             isRepeated = isRepeated,
             isOptional = isOptional,
-            options = options
+            options = options,
+            comments = collectedComments.toList().also { collectedComments.clear() }
         )
     }
 
@@ -148,10 +172,16 @@ class ProtoFileParser(
         val reservedNames = mutableListOf<String>()
         val reservedNumbers = mutableListOf<Int>()
         val reservedRanges = mutableListOf<IntRange>()
+        val comments = collectedComments.toList().also { collectedComments.clear() }
+
         idx += 3
 
         while (this[idx] != "}") {
             when (this[idx]) {
+                "…" -> {
+                    collectedComments.add(this[idx + 1].toComment())
+                    idx++
+                }
                 "reserved" -> readReserved().let {
                     reservedNames.addAll(it.names)
                     reservedNumbers.addAll(it.numbers)
@@ -189,7 +219,8 @@ class ProtoFileParser(
             ),
             fields = fields,
             oneOfs = oneOfs,
-            options = options
+            options = options,
+            comments = comments
         )
     }
 
@@ -197,6 +228,7 @@ class ProtoFileParser(
         val name = this[idx + 1]
         val fields = mutableListOf<Field>()
         val options = mutableMapOf<String, Any>()
+        val comments = collectedComments.toList().also { collectedComments.clear() }
         idx += 3
 
         while (this[idx] != "}") {
@@ -215,7 +247,8 @@ class ProtoFileParser(
         return OneOf(
             name = name,
             fields = fields,
-            options = options
+            options = options,
+            comments = comments
         )
     }
 
@@ -226,7 +259,7 @@ class ProtoFileParser(
         val reservedNames = mutableListOf<String>()
         val reservedNumbers = mutableListOf<Int>()
         val reservedRanges = mutableListOf<IntRange>()
-
+        val comments = collectedComments.toList().also { collectedComments.clear() }
         idx += 3
 
         while (this[idx] != "}") {
@@ -276,26 +309,53 @@ class ProtoFileParser(
             packageName = packageName,
             values = values,
             options = options,
-            reserved = Reserved(reservedNames, reservedNumbers, reservedRanges)
+            reserved = Reserved(reservedNames, reservedNumbers, reservedRanges),
+            comments = comments
         )
     }
 
     private fun List<String>.readOption(): Pair<String, Any> {
-        return if (this[idx + 1] == "(") {
-            if (this[idx + 4] == "=") {
-                (subList(idx + 1, idx + 4).joinToString("") to this[idx + 5]).also {
-                    idx += 6
-                }
-            } else {
-                (subList(idx + 1, idx + 5).joinToString("") to this[idx + 6]).also {
-                    idx += 7
-                }
-            }
+        val startIdx = idx + 1
+        while (this[++idx] != "=");
+        val equalIdx = idx
+        while (this[++idx] != ";");
+
+        val value = if (this[equalIdx + 1] == "{") {
+            "{\n" + subList(equalIdx + 2, idx - 1).chunked(3).joinToString("\n") { it.joinToString("") } + "\n}"
         } else {
-            (this[idx + 1] to this[idx + 3]).also {
-                idx += 4
-            }
+            subList(equalIdx + 1, idx).joinToString("")
         }
+
+        return subList(startIdx, equalIdx).joinToString("") to value
+    }
+
+    private fun List<String>.readFieldOptions(): Map<String, Any> {
+        val options = mutableMapOf<String, Any>()
+        var level = 0
+        var name: String? = null
+        var startIdx = idx + 1
+
+        while (this[idx] != ";") {
+            when (this[idx]) {
+                "{" -> level++
+                "}" -> level--
+                ",", "]" -> {
+                    if (level == 0 && name != null) {
+                        options[name] = subList(startIdx, idx).joinToString("")
+                        name = null
+                        startIdx = idx + 1
+                    }
+                }
+                "=" -> {
+                    name = subList(startIdx, idx).joinToString("")
+                    startIdx = idx + 1
+                }
+            }
+
+            idx++
+        }
+
+        return options
     }
 
     private fun List<String>.readReserved(): Reserved {
@@ -332,6 +392,7 @@ class ProtoFileParser(
     private fun List<String>.readService(): Service {
         val serviceName = this[idx + 1]
         val methods = mutableListOf<Method>()
+        val comments = collectedComments.toList().also { collectedComments.clear() }
 
         idx += 3
 
@@ -342,6 +403,10 @@ class ProtoFileParser(
         var isResponseStreamed: Boolean
 
         while (this[idx] != "}") {
+            if (this[idx] == "…") {
+                readTopAndBeforeComments()
+            }
+
             name = this[++idx]
 
             if (this[idx + 2] == "stream") {
@@ -389,6 +454,10 @@ class ProtoFileParser(
                 else -> idx += 4
             }
 
+            if (this[idx] == "…") {
+                readAfterComments()
+            }
+
             methods.add(
                 Method(
                     name = name,
@@ -396,12 +465,18 @@ class ProtoFileParser(
                     response = response,
                     isRequestStreamed = isRequestStreamed,
                     isResponseStreamed = isResponseStreamed,
-                    options = methodOptions
+                    options = methodOptions,
+                    comments = collectedComments.toList().also { collectedComments.clear() }
                 )
             )
         }
 
-        return Service(serviceName, methods, packageName)
+        return Service(
+            name = serviceName,
+            methods = methods,
+            packageName = packageName,
+            comments = comments
+        )
     }
 
     private fun List<String>.readImport(): Import {
@@ -441,17 +516,47 @@ class ProtoFileParser(
 
     private fun List<String>.readExtend(): Extend {
         val type = this[idx + 1]
-        val extendFields = mutableListOf<Field>()
+        val fields = mutableListOf<Field>()
+        val comments = collectedComments.toList().also { collectedComments.clear() }
         idx += 3
 
         while (this[idx] != "}") {
-            extendFields.add(this.readField(packageName))
+            fields.add(readField(packageName))
             idx++
         }
 
         return Extend(
             typeName = type,
-            fields = extendFields
+            fields = fields,
+            comments = comments
         )
+    }
+
+    private fun String.toComment(): Comment {
+        val isMultiLine = startsWith("/*") || endsWith("*/")
+
+        return Comment(
+            type = if (isMultiLine) Comment.Type.MULTILINE else Comment.Type.SINGLE_LINE,
+            placement = when {
+                startsWith('…') -> Comment.Placement.AFTER
+                endsWith('…') -> Comment.Placement.BEFORE
+                else -> Comment.Placement.TOP
+            },
+            value = trim('…')
+        )
+    }
+
+    private fun List<String>.readAfterComments() {
+        while (this[idx] == "…" && this[idx + 1].startsWith("…")) {
+            collectedComments.add(this[idx + 1].toComment())
+            idx += 2
+        }
+    }
+
+    private fun List<String>.readTopAndBeforeComments() {
+        while (this[idx] == "…") {
+            collectedComments.add(this[idx + 1].toComment())
+            idx += 2
+        }
     }
 }

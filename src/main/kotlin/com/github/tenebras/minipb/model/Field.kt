@@ -6,5 +6,6 @@ data class Field(
     val number: Int,
     val isRepeated: Boolean = false,
     val isOptional: Boolean = false,
-    val options: Map<String, Any> = emptyMap()
+    val options: Map<String, Any> = emptyMap(),
+    val comments: List<Comment> = emptyList()
 )

@@ -375,6 +375,13 @@ internal class ProtoFileParserTest {
             
             service Foo {
                 rpc Baz(Test) returns (Test) {
+                    option (google.api.http) = {
+                      post: "/api/bookings/vehicle/{vehicle_id}"
+                      body: "*"
+                      test: {
+                        asd: "asd"
+                      }
+                    };
                     option deadline = x;
                     option (msg).test = "test";
                 }
@@ -385,18 +392,25 @@ internal class ProtoFileParserTest {
             }
             
             message Test {
-                string test = 1;
+                string test = 1 [(validator.field) = {string_not_empty: true, length_lt: 255},deprecated=true];
             }
         """)
 
         val baz = file.service("Foo").method("Baz")
         val bar = file.service("Foo").method("Bar")
         val empty = file.service("Foo").method("Empty")
-
+        val test = file.type<MessageType>("Test")
         assertEquals("x", baz.options["deadline"])
         assertEquals("\"test\"", baz.options["(msg).test"])
+        assertEquals(
+            "{\npost:\"/api/bookings/vehicle/{vehicle_id}\"\nbody:\"*\"\ntest:{\nasd:\"asd\"\n}\n}",
+            baz.options["(google.api.http)"]
+        )
         assertEquals("x", bar.options["test"])
         assertTrue(empty.options.isEmpty())
+
+        assertEquals("{string_not_empty:true,length_lt:255}", test.field("test").options["(validator.field)"])
+        assertEquals("true", test.field("test").options["deprecated"])
     }
 
     @Test
@@ -407,6 +421,124 @@ internal class ProtoFileParserTest {
                 
                int32 fieldName = 1;
             """)
+        }
+    }
+
+    @Test
+    fun `should parse comments`() {
+        // todo enum comments
+        val file = ProtoFileParser.parseString("""
+            // Protocol Buffers - Google's data interchange format
+            // Copyright 2008 Google Inc.  All rights reserved.            
+            syntax = "proto3";
+            
+            // extend comment
+            extend google.protobuf.MethodOptions {
+                Test msg = 50056;
+                int64 deadline = 18;
+            }
+                        
+            /*
+              Multiline comment
+            */
+            // Service definition
+              // Offset comment
+            service Foo {
+                rpc Baz(Test) returns (Test){} // Right comment
+                /* left comment*/ rpc Bar(Test) returns (Test){}; /*right multiline*/ // Right comment
+                
+                // top comment
+                rpc Empty(Test) returns (Test); // Right comment
+            }
+            
+            /*
+              Multiline message comment
+            */
+            // Message comment
+            message Test {
+                // Field top comment
+                string test = 1; // Field right comment
+                int64 testInt64 = 2; /* Multiline field right comment */
+                /* multiline left comment */ int64 testInt32 = 3;
+                
+                // oneof comment
+                oneof oneof_test{
+                    string id = 4[deprecated=true, packed=false];// Field right comment
+                    uint32 number = 5;
+                }
+            }
+            """.trimIndent(),
+            includeComments = true
+        )
+
+        mapOf<Comment, Triple<String, Comment.Placement, Comment.Type>>(
+            file.headerComments[0] to Triple(
+                "// Protocol Buffers - Google's data interchange format",
+                Comment.Placement.TOP,
+                Comment.Type.SINGLE_LINE
+            ),
+            file.headerComments[1] to Triple(
+                "// Copyright 2008 Google Inc.  All rights reserved.            ",
+                Comment.Placement.TOP,
+                Comment.Type.SINGLE_LINE
+            ),
+            file.extends[0].comments[0] to Triple(
+                "// extend comment",
+                Comment.Placement.TOP,
+                Comment.Type.SINGLE_LINE
+            ),
+            file.services[0].comments[0] to Triple(
+                "/*\n  Multiline comment\n*/",
+                Comment.Placement.TOP,
+                Comment.Type.MULTILINE
+            ),
+            file.services[0].comments[1] to Triple(
+                "// Service definition",
+                Comment.Placement.TOP,
+                Comment.Type.SINGLE_LINE
+            ),
+            file.services[0].comments[2] to Triple(
+                "// Offset comment",
+                Comment.Placement.TOP,
+                Comment.Type.SINGLE_LINE
+            ),
+            file.services[0].method("Baz").comments[0] to Triple(
+                "// Field top comment",
+                Comment.Placement.TOP,
+                Comment.Type.SINGLE_LINE
+            ),
+            file.services[0].method("Bar").comments[0] to Triple(
+                "/* left comment*/",
+                Comment.Placement.BEFORE,
+                Comment.Type.MULTILINE
+            ),
+            file.services[0].method("Bar").comments[1] to Triple(
+                "/*right multiline*/",
+                Comment.Placement.AFTER,
+                Comment.Type.MULTILINE
+            ),
+            file.services[0].method("Bar").comments[2] to Triple(
+                "// Right comment",
+                Comment.Placement.AFTER,
+                Comment.Type.SINGLE_LINE
+            ),
+
+            file.services[0].method("Empty").comments[0] to Triple(
+                "// top comment",
+                Comment.Placement.TOP,
+                Comment.Type.SINGLE_LINE
+            ),
+            file.services[0].method("Empty").comments[1] to Triple(
+                "// Right comment",
+                Comment.Placement.AFTER,
+                Comment.Type.SINGLE_LINE
+            ),
+
+            // todo message comments
+        ).forEach { (comment, assertions) ->
+            assertEquals(assertions.first, comment.value)
+            assertEquals(assertions.second, comment.placement)
+            assertEquals(assertions.third, comment.type)
         }
     }
 }

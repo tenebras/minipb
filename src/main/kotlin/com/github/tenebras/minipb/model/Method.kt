@@ -6,5 +6,6 @@ data class Method (
     val response: Type,
     val isRequestStreamed: Boolean = false,
     val isResponseStreamed: Boolean = false,
-    val options: Map<String, Any> = emptyMap()
+    val options: Map<String, Any> = emptyMap(),
+    val comments: List<Comment> = emptyList()
 )
