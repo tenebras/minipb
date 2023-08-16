@@ -496,7 +496,7 @@ class ProtoFileParser(
 
         val file = File(location?.parent?.let { "$it/$path" } ?: "./$path")
         val parsedFile = when {
-            file.exists() -> parseFile(File(path), typeResolver)
+            file.exists() -> parseFile(file, typeResolver)
             path.startsWith("google/protobuf/") -> {
                 val content = ProtoFileParser::class.java.classLoader.getResourceAsStream(path)
                     ?.bufferedReader()
