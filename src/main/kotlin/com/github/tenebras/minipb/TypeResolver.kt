@@ -75,13 +75,16 @@ class TypeResolver {
     private fun updateReferences(type: Type) {
         val resolved = mutableListOf<String>()
 
-        references.filterValues { r -> r.any { it.name == type.name } }.keys.forEach { typeName ->
-            types[typeName] = (types[typeName] as MessageType).copyWithResolvedReferences().also {
-                if (!it.hasTypeReferences()) {
-                    resolved.add(typeName)
+        references
+            .filterValues { r -> r.any { it.name == type.fullName() || it.name == type.name } }
+            .keys
+            .forEach { typeName ->
+                types[typeName] = (types[typeName] as MessageType).copyWithResolvedReferences().also {
+                    if (!it.hasTypeReferences()) {
+                        resolved.add(typeName)
+                    }
                 }
             }
-        }
 
         resolved.forEach {
             references.remove(it)
